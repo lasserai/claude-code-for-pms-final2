@@ -24,6 +24,10 @@ built from your own questions.
 
 ### 1.
 
+What was the root-cause problem for the 4.2 troubles? Give the answer in short sentences and with max 10 sentences.
+
 ### 2.
+
+Give me the solution that fixes the problem 4.2 problem without affecting negatively profitability or customer satisfaction.
 
 ### 3.
