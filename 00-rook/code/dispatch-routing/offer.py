@@ -27,7 +27,10 @@ def dispatch(callout):
         if answer == ACCEPTED:
             history.record_accepted(responder)
             return responder
-        history.record_declined(responder)
+        elif answer == DECLINED:
+            history.record_declined(responder)
+        else:
+            history.record_no_answer(responder)
     return None
 
 
