@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiet Responder Prototype</title>
+<style>
+  :root {
+    --bg: #f4f3ef; --panel: #ffffff; --panel-2: #f8f7f4; --ink: #1c1b19; --muted: #6b6860;
+    --line: #e2dfd7; --accent: #2f5bd3; --accent-ink: #fff;
+    --quiet: #b4540a; --quiet-bg: #fdf0e3; --busy: #7a3fb0; --busy-bg: #f3ebfa;
+    --ok: #1f7a4a; --ok-bg: #e5f4ec; --bad: #b3261e; --bar: #c9c5bb; --bar-hi: #2f5bd3;
+    --proto: #8a6d00; --proto-bg: #fff6d1; --phone: #111; --screen: #fbfaf7;
+  }
+  :root[data-theme="dark"] {
+    --bg: #15161a; --panel: #1e2026; --panel-2: #24262d; --ink: #ecebe6; --muted: #9a988f;
+    --line: #33353d; --accent: #7a9cff; --accent-ink: #0d1020;
+    --quiet: #f0a45b; --quiet-bg: #3a2717; --busy: #c79bf0; --busy-bg: #2e2238;
+    --ok: #6fd19b; --ok-bg: #173226; --bad: #ff8a80; --bar: #4a4c55; --bar-hi: #7a9cff;
+    --proto: #f3d36b; --proto-bg: #3a3212; --phone: #000; --screen: #1a1b20;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15161a; --panel: #1e2026; --panel-2: #24262d; --ink: #ecebe6; --muted: #9a988f;
+      --line: #33353d; --accent: #7a9cff; --accent-ink: #0d1020;
+      --quiet: #f0a45b; --quiet-bg: #3a2717; --busy: #c79bf0; --busy-bg: #2e2238;
+      --ok: #6fd19b; --ok-bg: #173226; --bad: #ff8a80; --bar: #4a4c55; --bar-hi: #7a9cff;
+      --proto: #f3d36b; --proto-bg: #3a3212; --phone: #000; --screen: #1a1b20;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  button { font: inherit; cursor: pointer; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .proto-bar { background: var(--proto-bg); color: var(--proto); border-bottom: 1px solid var(--line);
+    padding: 8px 16px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font-size: 13px; }
+  .proto-bar strong { letter-spacing: .04em; text-transform: uppercase; font-size: 11px; }
+  .seg { display: inline-flex; border: 1px solid currentColor; border-radius: 999px; overflow: hidden; }
+  .seg button { background: transparent; color: inherit; border: 0; padding: 4px 12px; font-size: 13px; }
+  .seg button[aria-pressed="true"] { background: var(--proto); color: var(--proto-bg); font-weight: 600; }
+  .proto-bar .spacer { flex: 1; }
+  .link-btn { background: none; border: 0; color: inherit; text-decoration: underline; padding: 0; font-size: 13px; }
+
+  header.console { display: flex; align-items: center; gap: 14px; padding: 12px 20px;
+    background: var(--panel); border-bottom: 1px solid var(--line); }
+  .logo { font-weight: 700; letter-spacing: .02em; }
+  .logo span { color: var(--muted); font-weight: 500; }
+  header nav { display: flex; gap: 16px; color: var(--muted); font-size: 14px; }
+  header nav b { color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--accent); padding-bottom: 2px; }
+  header .who { margin-left: auto; font-size: 13px; color: var(--muted); }
+
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; padding: 20px; max-width: 1280px; margin: 0 auto; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; } header nav { display: none; } }
+
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; margin: -6px 0 14px; }
+
+  .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .card.flag-quiet { border-color: var(--quiet); box-shadow: inset 4px 0 0 var(--quiet); }
+  .card.flag-busy { border-color: var(--busy); box-shadow: inset 4px 0 0 var(--busy); }
+  .card.flag-ok { border-color: var(--ok); box-shadow: inset 4px 0 0 var(--ok); }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .name { font-weight: 650; font-size: 17px; }
+  .tags { color: var(--muted); font-size: 12px; }
+  .status-pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--ok-bg); color: var(--ok); white-space: nowrap; }
+  .badge { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+  .badge.quiet { background: var(--quiet-bg); color: var(--quiet); }
+  .badge.busy { background: var(--busy-bg); color: var(--busy); }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .headline { font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
+  .headline small { font-size: 14px; font-weight: 500; color: var(--muted); }
+  .spark { width: 100%; height: 64px; display: block; }
+  .spark-legend { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: -6px; }
+  .why { background: var(--panel-2); border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+  .why .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; display: block; margin-bottom: 2px; }
+  .why details { margin-top: 6px; font-size: 13px; color: var(--muted); }
+  .why summary { cursor: pointer; color: var(--accent); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn { border-radius: 8px; padding: 8px 14px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-weight: 550; font-size: 14px; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .today-note { color: var(--muted); font-size: 13px; font-style: italic; }
+  .meta { font-size: 12px; color: var(--muted); }
+
+  .feed { margin-top: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .feed ol { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  .feed li { padding: 6px 0; border-top: 1px solid var(--line); display: flex; gap: 10px; }
+  .feed li:first-child { border-top: 0; }
+  .feed time { color: var(--muted); min-width: 52px; font-variant-numeric: tabular-nums; }
+
+  /* phone */
+  .phone-wrap { position: sticky; top: 16px; align-self: start; }
+  .phone { background: var(--phone); border-radius: 38px; padding: 12px; width: 100%; max-width: 320px; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+  .screen { background: var(--screen); border-radius: 28px; min-height: 560px; padding: 18px 16px; display: flex; flex-direction: column; gap: 14px; position: relative; overflow: hidden; }
+  .notch { width: 90px; height: 6px; background: var(--line); border-radius: 6px; margin: -6px auto 2px; }
+  .ph-top { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .ph-title { font-size: 20px; font-weight: 650; }
+  .ph-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; font-size: 14px; }
+  .ph-card .big { font-size: 15px; font-weight: 600; }
+  .ph-btn { width: 100%; padding: 12px; border-radius: 12px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 650; font-size: 15px; }
+  .ph-btn.secondary { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); }
+  .ph-list { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+  .ph-list li { display: flex; justify-content: space-between; padding: 7px 0; border-top: 1px solid var(--line); }
+  .ph-list li:first-child { border-top: 0; }
+  .out { font-weight: 600; font-size: 12px; }
+  .out.accepted { color: var(--ok); } .out.missed { color: var(--quiet); } .out.declined { color: var(--bad); }
+  .offer { position: absolute; inset: 0; background: var(--screen); padding: 26px 18px; display: flex; flex-direction: column; gap: 14px; }
+  .ring { width: 120px; height: 120px; margin: 6px auto; }
+  .ring text { font-size: 28px; font-weight: 700; fill: var(--ink); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ph-btn.decline { background: var(--panel-2); color: var(--bad); border: 1px solid var(--line); }
+  .caption { text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; }
+
+  /* dialog & drawer */
+  dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink); max-width: 440px; width: calc(100% - 32px); padding: 20px; }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h3 { margin: 0 0 8px; font-size: 18px; }
+  dialog ul { padding-left: 18px; margin: 10px 0 16px; font-size: 14px; color: var(--muted); }
+  dialog .actions { justify-content: flex-end; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 4px; border-bottom: 1px solid var(--line); }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
+    padding: 10px 16px; border-radius: 10px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: calc(100% - 32px); }
+  .toast.show { opacity: 1; }
+  [hidden] { display: none !important; }
+  :root { --deliv: #0e7490; --deliv-bg: #e0f4f8; }
+  :root[data-theme="dark"] { --deliv: #5fd0e6; --deliv-bg: #11303a; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --deliv: #5fd0e6; --deliv-bg: #11303a; } }
+  .badge.delivery { background: var(--deliv-bg); color: var(--deliv); }
+  .card.flag-delivery { border-color: var(--deliv); box-shadow: inset 4px 0 0 var(--deliv); }
+  .card.selected { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .who select { font: inherit; font-size: 13px; color: var(--ink); background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; margin-left: 6px; max-width: 260px; }
+  .summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .summary:empty { display: none; }
+  .chip { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+  .chip b { font-size: 15px; margin-right: 2px; }
+  .chip.quiet { color: var(--quiet); border-color: var(--quiet); } .chip.delivery { color: var(--deliv); border-color: var(--deliv); }
+  .chip.busy { color: var(--busy); border-color: var(--busy); } .chip.ok { color: var(--ok); border-color: var(--ok); }
+  .region { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px 14px; overflow-x: auto; }
+  .rtable td, .rtable th { white-space: nowrap; vertical-align: top; }
+  .rtable tbody tr { cursor: pointer; }
+  .rtable tbody tr:hover, .rtable tbody tr:focus { background: var(--panel-2); outline: none; }
+  .engine { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; border: 1px dashed currentColor; border-radius: 6px; padding: 2px 8px; }
+  .clock b { font-variant-numeric: tabular-nums; }
+  .countdown { font-size: 13px; color: var(--muted); border-top: 1px dashed var(--line); margin-top: 8px; padding-top: 8px; }
+  .countdown b { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="proto-bar" role="region" aria-label="Prototype controls">
+  <strong>Prototype</strong>
+  <div class="seg" role="group" aria-label="Which version">
+    <button id="modeToday" aria-pressed="false">Today (4.2)</button>
+    <button id="modeAfter" aria-pressed="true">With this change</button>
+  </div>
+  <span class="clock">📅 <b id="clock"></b></span>
+  <button class="link-btn" id="skip" title="Move the prototype clock forward one day">⏩ +1 day</button>
+  <button class="link-btn" id="simulate">▶ Simulate a matching callout</button>
+  <button class="link-btn" id="reset">Reset</button>
+  <span class="engine" title="Internal only. Never shown to handlers or responders."><span id="engName"></span> hidden standing: <b id="score"></b> <span id="scoreNote"></span></span>
+  <span class="spacer"></span>
+  <span>Weekly offer counts and ticket IDs are real (to 31 Aug). Offer rows and capability tags are illustrative.</span>
+  <button class="link-btn" id="theme">Dark mode</button>
+</div>
+
+<header class="console">
+  <div class="logo">ROOK <span>Dispatch · Console</span></div>
+  <nav><b>Coverage</b><span>Incidents</span><span>Availability</span><span>Reports</span></nav>
+  <label class="who">Signed in as
+    <select id="viewer" aria-label="View the console as"></select>
+  </label>
+</header>
+
+<main>
+  <section aria-labelledby="covH">
+    <h2 id="covH"></h2>
+    <p class="sub" id="covSub"></p>
+    <div class="summary" id="summary"></div>
+    <div class="cards" id="cards" aria-live="polite"></div>
+    <div class="region" id="region"></div>
+
+    <div class="feed" id="feedBox">
+      <h2>Activity</h2>
+      <ol id="feed"></ol>
+    </div>
+  </section>
+
+  <aside class="phone-wrap" aria-label="Responder phone">
+    <div class="phone"><div class="screen" id="screen"></div></div>
+    <p class="caption" id="phoneCaption"></p>
+  </aside>
+</main>
+
+<dialog id="checkinDlg" aria-labelledby="ciTitle">
+  <h3 id="ciTitle"></h3>
+  <p style="margin:0;font-size:14px">This tells Dispatch they're ready for work again.</p>
+  <ul>
+    <li>Restores their standing to normal right away. It never lowers it.</li>
+    <li>Doesn't guarantee offers. Whoever is closest still gets asked first.</li>
+    <li>Can be used once every 7 days. Logged in the audit trail.</li>
+    <li>If you do nothing, it happens automatically after 7 days without offers.</li>
+    <li>Doesn't change their availability hours.</li>
+  </ul>
+  <div class="actions">
+    <button class="btn" id="ciCancel">Cancel</button>
+    <button class="btn primary" id="ciConfirm">Check in</button>
+  </div>
+</dialog>
+
+<dialog id="histDlg" aria-labelledby="hTitle">
+  <h3 id="hTitle"></h3>
+  <table><thead><tr><th>When</th><th>Needed</th><th>Outcome</th></tr></thead><tbody id="histRows"></tbody></table>
+  <p class="meta" style="margin-top:10px">Shows outcomes only. No scores or ranking positions.</p>
+  <div class="actions"><button class="btn" id="hClose">Close</button></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+// ---------- Real data: callout-history.csv (weekly offers sent) + tickets T-001–T-025 ----------
+const WEEKS = ['29 Jun','6 Jul','13 Jul','20 Jul','27 Jul','3 Aug','10 Aug','17 Aug','24 Aug','31 Aug'];
+const D = s => new Date(s);
+// kind: quiet = standing collapse · delivery = sent-counts normal/rising but people report silence
+//       busy = well above usual · normal
+const ROSTER = [
+  { name: 'Meteor Mite', handler: 'Kip', tags: 'flight · cold-weather · structural-entry', weeks: [11,12,10,11,12,11,10,4,2,1], taken: 0, kind: 'quiet', tickets: [],
+    raw: 0.10, last: '2026-09-02T21:14', hist: [['2026-09-02T21:14','flight','missed'],['2026-08-26T23:40','flight, cold-weather','missed'],['2026-08-24T19:05','flight','missed'],['2026-08-20T02:12','flight','accepted'],['2026-08-19T22:31','structural-entry','missed'],['2026-08-18T20:47','flight','declined'],['2026-08-17T23:58','flight','missed']] },
+  { name: 'The Gale', handler: 'Kip', tags: 'flight · crowd-management', weeks: [13,12,13,14,13,13,15,17,20,21], taken: 16, kind: 'busy', tickets: [] },
+  { name: 'Vesper', handler: 'Aunt Dot', tags: 'structural-entry · de-escalation', weeks: [14,13,15,14,13,14,12,5,2,1], taken: 0, kind: 'quiet', tickets: [],
+    raw: 0.12, last: '2026-09-01T20:30', hist: [['2026-09-01T20:30','structural-entry','missed'],['2026-08-27T19:10','de-escalation','missed'],['2026-08-25T22:40','structural-entry','declined'],['2026-08-20T18:05','structural-entry','accepted'],['2026-08-18T21:30','de-escalation','missed']] },
+  { name: 'The Undertow', handler: 'Desmond Okafor', tags: 'aquatic · cold-weather', weeks: [12,11,12,13,12,12,11,4,1,1], taken: 0, kind: 'quiet', tickets: ['T-005','T-013','T-019'],
+    raw: 0.08, last: '2026-09-03T22:05', hist: [['2026-09-03T22:05','aquatic','missed'],['2026-08-27T20:15','aquatic','missed'],['2026-08-19T23:00','aquatic','accepted'],['2026-08-18T19:40','aquatic, cold-weather','missed'],['2026-08-17T21:10','aquatic','missed']] },
+  { name: 'Farlight', handler: 'Linda Pruitt', tags: 'crowd-management · flight', weeks: [12,12,11,12,13,12,10,3,1,0], taken: 0, kind: 'quiet', tickets: ['T-018'],
+    raw: 0.10, last: '2026-08-26T23:10', hist: [['2026-08-26T23:10','crowd-management','missed'],['2026-08-19T21:00','flight','missed'],['2026-08-18T20:10','crowd-management','declined'],['2026-08-17T22:45','crowd-management','accepted']] },
+  { name: 'Nightwell', handler: 'Marjorie Sung', tags: 'de-escalation · crowd-management', weeks: [15,14,15,16,15,15,16,18,20,21], taken: 15, kind: 'delivery', tickets: ['T-004','T-009','T-011'] },
+  { name: 'Stormwrack', handler: 'Renata Kovač', tags: 'hazmat-tolerant · structural-entry', weeks: [13,13,12,14,13,13,14,16,18,19], taken: 15, kind: 'delivery', tickets: ['T-014','T-024'] },
+  { name: 'Ironvale', handler: 'Teresa Alvarez', tags: 'structural-entry · hazmat-tolerant', weeks: [8,8,9,8,7,8,9,10,11,12], taken: 9, kind: 'delivery', tickets: ['T-008','T-017','T-025'] },
+  { name: 'Cindermark', handler: 'Farid Haddad', tags: 'hazmat-tolerant', weeks: [9,9,8,10,9,9,10,11,12,12], taken: 9, kind: 'delivery', tickets: ['T-015','T-020'] },
+  { name: 'Sgt. Falkirk', handler: 'Owen Bramwell', tags: 'crowd-management · de-escalation', weeks: [10,10,11,10,9,10,11,13,15,16], taken: 11, kind: 'delivery', tickets: ['T-003','T-016'] },
+  { name: 'The Drift', handler: 'Beatrice Calloway', tags: 'aquatic', weeks: [6,6,7,6,6,6,7,7,8,8], taken: 5, kind: 'delivery', tickets: ['T-022','T-023'] },
+  { name: 'The Longcast', handler: 'Graham Petrov', tags: 'flight · aquatic', weeks: [7,7,8,7,7,7,8,8,9,9], taken: 7, kind: 'delivery', tickets: ['T-007','T-012'] },
+  { name: 'Halfmoon', handler: 'Simone Fischer', tags: 'de-escalation', weeks: [11,10,11,12,11,11,11,9,8,8], taken: 7, kind: 'delivery', tickets: ['T-010','T-021'] },
+  { name: 'Corporal Ashgrove', handler: 'Yusuf Demir', tags: 'cold-weather · structural-entry', weeks: [10,11,10,9,10,10,10,8,7,7], taken: 5, kind: 'delivery', tickets: ['T-002','T-006'] },
+  { name: 'Captain Vantage', handler: 'Mr. Ambrose', tags: 'flight · structural-entry', weeks: [12,13,12,11,12,12,13,15,17,18], taken: 13, kind: 'busy', tickets: ['T-001'] },
+  { name: 'Sgt. Bulwark', handler: 'Halloran', tags: 'structural-entry · crowd-management', weeks: [9,9,10,9,8,9,10,10,11,11], taken: 8, kind: 'normal', tickets: [] },
+];
+
+// ---------- Rules (config.py + auto-reset-spec.md) ----------
+const NEUTRAL = 0.5, DECAY_PER_DAY = 0.05, RESET_AFTER_IDLE_DAYS = 7;
+const CREDIT = 0.10, DECLINE = 0.10, TIMEOUT = 0.05;
+const ASK_THRESHOLD = 0.35;   // prototype stand-in: below this a closer responder always wins
+const DAY = 86400000, START = D('2026-09-06T21:20');
+const REGION = '__region';
+
+const fmtDay = d => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+const fmtShort = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const hhmm = d => d.toTimeString().slice(0,5);
+const fmtWhen = d => fmtShort(d) + ' ' + hhmm(d);
+const median = a => { const s = [...a].sort((x,y) => x-y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2; };
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const cap = s => s[0].toUpperCase() + s.slice(1);
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+// Illustrative offer rows for responders we don't hand-script: last week's real count,
+// spread over the 7 days before START, with the real taken/sent ratio.
+function genHistory(r) {
+  const n = r.weeks[9], rows = [];
+  for (let i = 0; i < n; i++) {
+    const at = new Date(START.getTime() - (i + 0.5) * (7 * DAY / n) - (i * 37 % 90) * 60000);
+    const out = i < r.taken ? 'accepted' : (i % 3 === 0 ? 'declined' : 'missed');
+    rows.push({ at, need: r.tags.split(' · ')[i % r.tags.split(' · ').length], out });
+  }
+  return rows.sort((a, b) => b.at - a.at);
+}
+
+let state;
+function initState(mode, keepView) {
+  const prev = state;
+  state = {
+    mode: mode || 'after', now: new Date(START),
+    viewer: keepView && prev ? prev.viewer : 'Kip',
+    phone: keepView && prev ? prev.phone : 'Meteor Mite',
+    offerTimer: null, feed: [], people: {},
+  };
+  for (const r of ROSTER) {
+    const p = {
+      ...r,
+      usual: median(r.weeks.slice(0, 6)),
+      raw: r.raw ?? 0.55,
+      lastChange: D(r.last || '2026-09-05T18:00'),
+      lastOffer: D(r.last || '2026-09-05T18:00'),
+      restored: null, lastCheckin: null, sinceRestore: [], reported: false, acc: 0,
+      history: r.hist ? r.hist.map(([at, need, out]) => ({ at: D(at), need, out })) : genHistory(r),
+    };
+    if (!r.last) p.lastOffer = p.lastChange = p.history[0] ? p.history[0].at : START;
+    state.people[r.name] = p;
+  }
+  if (state.mode === 'after') applyAutoResets(true);   // Farlight's 7 days ran out on 2 Sep
+  for (const p of Object.values(state.people)) {
+    if (p.kind === 'quiet' && !p.restored) state.feed.push({ at: START, msg: `${p.name} flagged: gone quiet (${p.weeks[9]} offer${p.weeks[9] === 1 ? '' : 's'} last week, usually ~${p.usual}).` });
+    if (p.kind === 'delivery') state.feed.push({ at: START, msg: `${p.name} flagged: records show ${p.weeks[9]} offers sent, but ${p.tickets.join(', ')} report nothing arriving. Sent to the delivery audit.` });
+  }
+}
+
+// ---------- Standing engine ----------
+function standing(p, at = state.now) {
+  if (state.mode === 'today') return p.raw;
+  const idle = (at - p.lastChange) / DAY;
+  return p.raw + (NEUTRAL - p.raw) * Math.min(1, idle * DECAY_PER_DAY);
+}
+const resetDue = p => new Date(p.lastOffer.getTime() + RESET_AFTER_IDLE_DAYS * DAY);
+const offersLast7 = p => p.history.filter(o => o.at <= state.now && state.now - o.at < 7 * DAY).length;
+const lowStanding = p => standing(p) < ASK_THRESHOLD;
+
+function applyAutoResets(silent) {
+  if (state.mode === 'today') return;
+  for (const p of Object.values(state.people)) {
+    const due = resetDue(p);
+    if (state.now < due) continue;
+    const before = standing(p, due);
+    if (before >= NEUTRAL) continue;
+    if (p.restored && p.restored.key === p.lastOffer.getTime()) continue;   // idempotent per idle period
+    p.raw = NEUTRAL; p.lastChange = due;
+    p.restored = { how: 'auto', at: due, key: p.lastOffer.getTime() };
+    p.sinceRestore = [];
+    state.feed.push({ at: due, msg: `System restored ${p.name}'s standing after 7 days without offers (${before.toFixed(2)} → 0.50). Audit log: actor = system.` });
+    if (!silent) toast(`7 days without offers: ${p.name}'s standing was reset to normal automatically.`);
+  }
+}
+
+// ---------- What the console says about one person ----------
+function view(p) {
+  const s = standing(p), n7 = offersLast7(p), due = resetDue(p);
+  const accepted = p.sinceRestore.filter(o => o.out === 'accepted').length;
+  const checkinNext = p.lastCheckin ? new Date(p.lastCheckin.getTime() + 7 * DAY) : null;
+  const canCheckin = !checkinNext || state.now >= checkinNext;
+  const sod = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const days = Math.round((sod(due) - sod(state.now)) / DAY);
+  const v = { n7, canCheckin, checkinNext, countdown: '', checkin: false, short: '' };
+
+  if (p.kind === 'delivery') {
+    Object.assign(v, { flag: 'delivery', badge: p.reported ? '● Delivery check requested' : "● Can't confirm delivery",
+      why: `Records show ${p.weeks[9]} offers sent last week, but ${p.tickets.length > 1 ? 'tickets' : 'a ticket'} (${p.tickets.join(', ')}) say${p.tickets.length > 1 ? '' : 's'} nothing is arriving.`,
+      detail: `This isn't about standing. ${p.name} is being ranked and offered as usual. Until phones confirm delivery, we can't tell whether offers reach the device. ${p.name} is part of the push-delivery audit.`,
+      short: 'Sent, not confirmed arriving' });
+  } else if (p.restored && s >= ASK_THRESHOLD) {
+    const auto = p.restored.how === 'auto';
+    Object.assign(v, { flag: 'ok',
+      badge: accepted ? '● Back in rotation' : auto ? '● Standing restored automatically' : '● Checked in · recovering',
+      why: auto ? `No offers for 7 days, so standing was reset to normal on ${fmtShort(p.restored.at)}. Offers now depend on who's closest.`
+                : `Standing restored to normal. Next offers depend on who's closest to each callout.`,
+      detail: `No longer held back by past misses. Offers aren't guaranteed. A responder closer to the incident still gets asked first.` +
+        (p.sinceRestore.length ? ` Since then: ${p.sinceRestore.length} offer${p.sinceRestore.length > 1 ? 's' : ''}, ${accepted} accepted.` : ''),
+      short: auto ? `Auto-restored ${fmtShort(p.restored.at)}` : 'Checked in', checkin: true });
+  } else if (p.kind === 'quiet' || lowStanding(p)) {
+    Object.assign(v, { flag: 'quiet', badge: '● Gone quiet',
+      why: 'Ranked lower after missed offers. Check in to reset.',
+      detail: `Missed offers after the timeout got shorter in 4.2 lowered ${p.name}'s standing, and lower standing means fewer offers, so it couldn't recover on its own. It isn't the phone or the account.`,
+      countdown: `<div class="countdown">Resets automatically on <b>${fmtDay(due)}</b> if no offers arrive (${days <= 0 ? 'today' : days === 1 ? 'tomorrow' : 'in ' + days + ' days'}). Or check in now.</div>`,
+      short: `Low standing · auto-reset ${fmtShort(due)}`, checkin: true });
+  } else if (p.kind === 'busy') {
+    Object.assign(v, { flag: 'busy', badge: '● Busier than usual',
+      why: 'Getting offers that others nearby would usually share.',
+      detail: 'Some responders in this area have gone quiet, so more callouts reach this one. This flag is for awareness only. v1 doesn\'t limit load.',
+      short: `${(p.weeks[9] / p.usual).toFixed(1)}× usual` });
+  } else {
+    Object.assign(v, { flag: 'ok', badge: '● Normal', why: 'Offers are in their usual range.', detail: 'Nothing to act on.', short: 'Normal' });
+  }
+  return v;
+}
+
+function spark(data, kind) {
+  const w = 300, h = 56, n = data.length, gap = 4, bw = (w - gap * (n - 1)) / n, max = 22;
+  const hiCol = { quiet: 'var(--quiet)', busy: 'var(--busy)', delivery: 'var(--deliv)' }[kind] || 'var(--bar-hi)';
+  let bars = '';
+  data.forEach((v, i) => {
+    const bh = Math.max(2, (v / max) * (h - 6));
+    bars += `<rect x="${i*(bw+gap)}" y="${h-bh}" width="${bw}" height="${bh}" rx="2" fill="${i === n-1 ? hiCol : 'var(--bar)'}"><title>${WEEKS[i]}: ${v} offers</title></rect>`;
+  });
+  const x = 6*(bw+gap) - gap/2;
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Offers per week: ${data.join(', ')}">
+    ${bars}<line x1="${x}" x2="${x}" y1="0" y2="${h}" stroke="var(--muted)" stroke-dasharray="3 3" stroke-width="1"/></svg>
+    <div class="spark-legend"><span>${WEEKS[0]}</span><span>4.2 ↑</span><span>${WEEKS[n-1]}</span></div>`;
+}
+
+// ---------- Rendering ----------
+function cardHTML(p) {
+  const today = state.mode === 'today', v = view(p), id = slug(p.name);
+  const selected = state.phone === p.name ? ' selected' : '';
+  return `<article class="card${today ? '' : ' flag-' + v.flag}${selected}" data-name="${esc(p.name)}">
+    <div class="card-head">
+      <div><div class="name">${esc(p.name)}</div><div class="tags">${esc(p.tags)}</div></div>
+      <span class="status-pill">Available</span>
+    </div>
+    ${today ? '' : `<div><span class="badge ${v.flag}">${v.badge}</span></div>`}
+    <div class="headline">${v.n7} <small>offer${v.n7 === 1 ? '' : 's'} in the last 7 days${today ? '' : ` · usually ~${p.usual}`}</small></div>
+    ${spark(p.weeks, today ? '' : v.flag)}
+    ${today ? `<p class="today-note">${p.kind === 'quiet' ? 'Nothing here explains the drop.' : p.kind === 'delivery' ? 'Looks healthy here, yet the responder says nothing arrives.' : 'No context about the rest of the area.'}</p>`
+      : `<div class="why"><span class="label">Why</span>${v.why}<details><summary>What this means</summary>${v.detail}</details>${v.countdown}</div>`}
+    <div class="actions">
+      ${!today && v.checkin ? `<button class="btn primary" data-act="checkin" ${v.canCheckin ? '' : 'disabled'}>${v.canCheckin ? 'Check in' : 'Checked in · next ' + fmtShort(v.checkinNext)}</button>` : ''}
+      ${!today ? '<button class="btn" data-act="hist">Recent offers</button>' : ''}
+      <button class="btn" data-act="phone">${state.phone === p.name ? '📱 On phone' : '📱 Show phone'}</button>
+    </div>
+  </article>`;
+}
+
+function renderConsole() {
+  const today = state.mode === 'today', isRegion = state.viewer === REGION;
+  const people = Object.values(state.people);
+  $('cards').hidden = isRegion; $('region').hidden = !isRegion;
+  if (isRegion) {
+    $('covH').textContent = 'Region overview · all responders';
+    $('covSub').textContent = 'Dispatch team and Support view. Click a row to open that handler\'s console.';
+    const order = { quiet: 0, delivery: 1, busy: 2, ok: 3 };
+    const rows = people.map(p => ({ p, v: view(p) })).sort((a, b) => order[a.v.flag] - order[b.v.flag] || a.p.name.localeCompare(b.p.name));
+    const counts = rows.reduce((c, { v }) => (c[v.flag] = (c[v.flag] || 0) + 1, c), {});
+    $('summary').innerHTML = today
+      ? `<div class="chip">Acceptance rate this week: <b>73%</b> (was 77% before 4.2). Looks nearly recovered.</div>`
+      : [['quiet','Gone quiet'],['delivery',"Can't confirm delivery"],['busy','Busier than usual'],['ok','Normal / restored']]
+          .map(([k, l]) => `<div class="chip ${k}"><b>${counts[k] || 0}</b> ${l}</div>`).join('');
+    $('region').innerHTML = `<table class="rtable"><thead><tr><th>Responder</th><th>Handler</th><th>Last week</th><th>Usual</th>${today ? '' : '<th>Status</th><th>Tickets</th>'}</tr></thead><tbody>` +
+      rows.map(({ p, v }) => `<tr data-handler="${esc(p.handler)}" data-name="${esc(p.name)}" tabindex="0">
+        <td><b>${esc(p.name)}</b></td><td>${esc(p.handler)}</td><td>${p.weeks[9]}</td><td>~${p.usual}</td>
+        ${today ? '' : `<td><span class="badge ${v.flag}">${v.badge.replace('● ', '')}</span><div class="meta">${esc(v.short)}</div></td><td class="meta">${p.tickets.join(', ') || '—'}</td>`}</tr>`).join('') +
+      `</tbody></table>`;
+    if (today) $('region').insertAdjacentHTML('beforeend', `<p class="today-note">In 4.2 the console has no region view with flags. The headline number is all anyone sees.</p>`);
+    $('region').querySelectorAll('tr[data-handler]').forEach(tr => {
+      const go = () => { state.viewer = tr.dataset.handler; state.phone = tr.dataset.name; render(); };
+      tr.onclick = go; tr.onkeydown = e => { if (e.key === 'Enter') go(); };
+    });
+  } else {
+    const mine = people.filter(p => p.handler === state.viewer);
+    $('covH').textContent = `My responders · ${mine.length}`;
+    $('covSub').textContent = 'Bars: offers per week, 29 Jun–31 Aug. Dashed line marks 4.2 (12 Aug).';
+    $('summary').innerHTML = '';
+    $('cards').innerHTML = mine.map(cardHTML).join('');
+    $('cards').querySelectorAll('.card').forEach(card => {
+      const p = state.people[card.dataset.name];
+      card.querySelectorAll('[data-act]').forEach(b => b.onclick = () => {
+        if (b.dataset.act === 'checkin') openCheckin(p);
+        if (b.dataset.act === 'hist') openHistory(p);
+        if (b.dataset.act === 'phone') { state.phone = p.name; render(); }
+      });
+    });
+  }
+}
+
+function renderPhone() {
+  const s = $('screen'), today = state.mode === 'today', p = state.people[state.phone], v = view(p);
+  $('phoneCaption').textContent = `${p.name}'s phone (responder app) · handled by ${p.handler}`;
+  const recent = p.history.slice(0, 5).map(o =>
+    `<li><span>${esc(fmtWhen(o.at))}</span><span class="out ${o.out}">${cap(o.out)}</span></li>`).join('');
+  let status;
+  if (today) {
+    status = `<div class="ph-card"><div class="big">You're available</div><div class="meta">Waiting for callouts…</div></div>
+      <p class="today-note" style="font-size:13px">${p.kind === 'quiet' ? 'Silent for days. No history, no reason, nothing to do but wait.' : p.kind === 'delivery' ? '"Is my account broken?" Nothing on screen can answer that.' : 'No view of their own offers.'}</p>`;
+  } else if (v.flag === 'delivery') {
+    status = `<div class="ph-card"><div class="big" style="color:var(--deliv)">● Checking delivery</div>
+      <div class="meta">Our records show ${p.weeks[9]} offers sent to you last week. If your phone didn't ring for them, that's on us, not you. We're checking delivery to your phone.</div></div>
+      ${p.reported ? '<div class="ph-card meta">✓ Reported. Support will follow up with ' + esc(p.handler) + '.</div>'
+        : '<button class="ph-btn secondary" id="phReport">These never reached me</button>'}`;
+  } else if (v.flag === 'ok' && p.restored) {
+    status = p.restored.how === 'auto'
+      ? `<div class="ph-card"><div class="big" style="color:var(--ok)">● Back to normal</div><div class="meta">It's been a week without offers, so we reset your standing. Nothing you need to do. Offers depend on who's closest.</div></div>`
+      : `<div class="ph-card"><div class="big" style="color:var(--ok)">● Recovering</div><div class="meta">You checked in. Your standing is back to normal. Offers depend on who's closest.</div></div>`;
+  } else if (v.flag === 'quiet') {
+    status = `<div class="ph-card"><div class="big" style="color:var(--quiet)">● Quiet lately</div>
+      <div class="meta">${v.n7} offer${v.n7 === 1 ? '' : 's'} this week, usually ~${p.usual}. Missed offers lowered your standing. It isn't your phone.
+      Resets automatically on <b>${fmtShort(resetDue(p))}</b>, or tap below now.</div></div>
+      ${v.canCheckin ? '<button class="ph-btn" id="phCheckin">I\'m back — send me work</button>' : ''}`;
+  } else if (v.flag === 'busy') {
+    status = `<div class="ph-card"><div class="big" style="color:var(--busy)">● Busy week</div><div class="meta">${p.weeks[9]} offers last week, more than your usual ~${p.usual}. You can set yourself unavailable any time.</div></div>`;
+  } else {
+    status = `<div class="ph-card"><div class="big">● Normal</div><div class="meta">Your offers are in their usual range.</div></div>`;
+  }
+  s.innerHTML = `<div class="notch"></div>
+    <div class="ph-top"><span>${hhmm(state.now)}</span><span>${fmtShort(state.now)}</span></div>
+    <div class="ph-title">${esc(p.name)}</div>
+    ${status}
+    ${today ? '' : `<div class="ph-card"><div class="big" style="margin-bottom:4px">Your offers</div><ul class="ph-list">${recent || '<li class="meta">None in the last 30 days</li>'}</ul></div>`}`;
+  if ($('phCheckin')) $('phCheckin').onclick = () => openCheckin(p);
+  if ($('phReport')) $('phReport').onclick = () => {
+    p.reported = true;
+    state.feed.push({ at: state.now, msg: `${p.name} reported offers not arriving. Attached to the delivery audit with ${p.weeks[9]} sent records. ${p.handler} notified.` });
+    render(); toast('Report sent with the offer records attached. No ticket-writing needed.');
+  };
+}
+
+function renderFeed() {
+  $('feedBox').hidden = state.mode === 'today';
+  const isRegion = state.viewer === REGION;
+  const mine = new Set(Object.values(state.people).filter(p => isRegion || p.handler === state.viewer).map(p => p.name));
+  const items = state.feed.filter(f => isRegion || [...mine].some(n => f.msg.includes(n)));
+  $('feed').innerHTML = items.slice().sort((a, b) => b.at - a.at).slice(0, 12)
+    .map(f => `<li><time>${esc(fmtShort(f.at))} ${esc(hhmm(f.at))}</time><span>${esc(f.msg)}</span></li>`).join('')
+    || '<li class="meta">Nothing yet.</li>';
+}
+
+function renderEngine() {
+  const p = state.people[state.phone], s = standing(p);
+  $('clock').textContent = fmtDay(state.now) + ' ' + hhmm(state.now);
+  $('engName').textContent = p.name + "'s";
+  $('score').textContent = s.toFixed(2);
+  $('scoreNote').textContent = state.mode === 'today'
+    ? (s < ASK_THRESHOLD ? '(4.2: never recovers)' : '')
+    : s < ASK_THRESHOLD ? `(too low to be asked · auto-reset ${fmtShort(resetDue(p))})` : '(normal range)';
+}
+
+function renderViewer() {
+  const handlers = [...new Set(ROSTER.map(r => r.handler))];
+  $('viewer').innerHTML = `<option value="${REGION}">Dispatch team · region overview</option>` +
+    handlers.map(h => {
+      const n = ROSTER.filter(r => r.handler === h).length;
+      const flag = state.mode === 'after' && Object.values(state.people).some(p => p.handler === h && ['quiet','delivery'].includes(view(p).flag));
+      return `<option value="${esc(h)}">${flag ? '● ' : ''}${esc(h)} (handler, ${n})</option>`;
+    }).join('');
+  $('viewer').value = state.viewer;
+}
+
+function render() {
+  $('modeToday').setAttribute('aria-pressed', state.mode === 'today');
+  $('modeAfter').setAttribute('aria-pressed', state.mode === 'after');
+  renderViewer(); renderEngine(); renderConsole(); renderPhone(); renderFeed();
+}
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 3400);
+}
+
+// ---------- Actions ----------
+let checkinTarget = null;
+function openCheckin(p) { checkinTarget = p; $('ciTitle').textContent = `Check ${p.name} back in?`; $('checkinDlg').showModal(); }
+function doCheckin() {
+  $('checkinDlg').close();
+  const p = checkinTarget; if (!p) return;
+  const s = standing(p);
+  p.raw = Math.max(s, NEUTRAL); p.lastChange = state.now;   // never lowers
+  p.restored = { how: 'checkin', at: state.now, key: 'checkin' }; p.lastCheckin = state.now; p.sinceRestore = [];
+  state.phone = p.name;
+  state.feed.push({ at: state.now, msg: `${state.viewer === REGION ? 'Dispatch team' : state.viewer} checked in ${p.name}. Standing ${s.toFixed(2)} → ${p.raw.toFixed(2)}. (Audit log)` });
+  render(); toast(`${p.name} checked in. Try "Simulate a matching callout".`);
+}
+
+function openHistory(p) {
+  $('hTitle').textContent = `${p.name} · offers, last 30 days`;
+  $('histRows').innerHTML = p.history.filter(o => state.now - o.at < 30 * DAY).map(o =>
+    `<tr><td>${esc(fmtWhen(o.at))}</td><td>${esc(o.need)}</td><td class="out ${o.out}">${cap(o.out)}</td></tr>`).join('')
+    || '<tr><td colspan="3" class="meta">No offers in the last 30 days.</td></tr>';
+  $('histDlg').showModal();
+}
+
+function skipDay() {
+  if (state.offerTimer) return;
+  state.now = new Date(state.now.getTime() + DAY);
+  // Everyone not held back keeps getting offers at their recent weekly pace.
+  for (const p of Object.values(state.people)) {
+    if (p.kind === 'quiet' || lowStanding(p)) continue;
+    p.acc += p.weeks[9] / 7;
+    while (p.acc >= 1) {
+      p.acc -= 1;
+      const at = new Date(state.now.getTime() - (p.acc * 20 + 1) * 3600000);
+      p.history.unshift({ at, need: p.tags.split(' · ')[0], out: 'accepted' });
+      p.lastOffer = at;
+    }
+  }
+  applyAutoResets(false);
+  render();
+  if (state.mode === 'today') toast('A day passes. In 4.2, quiet responders\' standing never moves.');
+}
+
+function simulate() {
+  if (state.offerTimer) return;
+  const p = state.people[state.phone];
+  const need = p.tags.split(' · ')[0];
+  if (p.kind === 'delivery') {
+    state.feed.push({ at: state.now, msg: `${cap(need)} callout offered to ${p.name}. Logged as sent, but no delivery receipt from the phone.` });
+    render();
+    toast(`Sent to ${p.name}, but the phone stays silent. This is the delivery problem, and a standing fix can't help it.`);
+    return;
+  }
+  if (lowStanding(p)) {
+    const other = Object.values(state.people).find(o => o.kind === 'busy' || o.kind === 'normal');
+    state.feed.push({ at: state.now, msg: `${cap(need)} callout 12 min from ${p.name} went to ${other.name}. ${p.name} ranked lower (standing).` });
+    render();
+    toast(state.mode === 'today' ? `Skipped ${p.name} again. In 4.2 nothing ever raises their standing.`
+      : `The callout skipped ${p.name}. Check in, or skip ahead to ${fmtShort(resetDue(p))} for the automatic reset.`);
+    return;
+  }
+  const TOTAL = 75; let left = TOTAL;
+  const ov = document.createElement('div');
+  ov.className = 'offer';
+  ov.innerHTML = `<div class="ph-top"><span>${hhmm(state.now)}</span><span>Rook</span></div>
+    <div class="ph-title">Callout offer</div>
+    <div class="ph-card"><div class="big">Needs: ${esc(need)}</div><div class="meta">About 12 min away</div></div>
+    <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+      <circle cx="60" cy="60" r="52" fill="none" stroke="var(--line)" stroke-width="8"/>
+      <circle id="arc" cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" stroke-width="8" stroke-linecap="round"
+        stroke-dasharray="326.7" stroke-dashoffset="0" transform="rotate(-90 60 60)"/>
+      <text id="secs" x="60" y="70" text-anchor="middle">${TOTAL}</text></svg>
+    <p class="meta" style="text-align:center;margin:0">75 seconds to answer (was 60 in 4.2)</p>
+    <div class="row2"><button class="ph-btn decline" id="offDecline">Decline</button><button class="ph-btn" id="offAccept">Accept</button></div>`;
+  $('screen').appendChild(ov);
+  $('offAccept').focus();
+  state.feed.push({ at: state.now, msg: `${cap(need)} callout offered to ${p.name}.` });
+  renderFeed();
+  const finish = out => {
+    clearInterval(state.offerTimer); state.offerTimer = null;
+    const s = standing(p);
+    p.raw = Math.max(0, Math.min(1, s + (out === 'accepted' ? CREDIT : out === 'declined' ? -DECLINE : -TIMEOUT)));
+    p.lastChange = state.now; p.lastOffer = state.now;   // a reached offer restarts the 7-day clock
+    const rec = { at: state.now, need, out };
+    p.history.unshift(rec); p.sinceRestore.push(rec);
+    state.feed.push({ at: state.now, msg: `${p.name} ${out === 'accepted' ? 'accepted. Incident assigned.' : out === 'declined' ? 'declined. Offer moved on.' : 'let the offer time out. Counts less than a decline.'} Standing ${s.toFixed(2)} → ${p.raw.toFixed(2)}. 7-day clock restarts.` });
+    render();
+    toast(out === 'accepted' ? `Accepted. ${p.name} is back in rotation.` : out === 'declined' ? 'Declined. Added to their offer history.' : 'Missed. Recorded at half the cost of a decline.');
+  };
+  $('offAccept').onclick = () => finish('accepted');
+  $('offDecline').onclick = () => finish('declined');
+  state.offerTimer = setInterval(() => {
+    left--;
+    const secs = document.getElementById('secs'), arc = document.getElementById('arc');
+    if (secs) secs.textContent = left;
+    if (arc) arc.setAttribute('stroke-dashoffset', String(326.7 * (1 - left / TOTAL)));
+    if (left <= 0) finish('missed');
+  }, 1000);
+}
+
+$('viewer').onchange = e => {
+  if (state.offerTimer) { e.target.value = state.viewer; return; }
+  state.viewer = e.target.value;
+  if (state.viewer !== REGION) state.phone = ROSTER.find(r => r.handler === state.viewer).name;
+  render();
+};
+$('modeToday').onclick = () => { if (state.offerTimer) return; initState('today', true); render(); };
+$('modeAfter').onclick = () => { if (state.offerTimer) return; initState('after', true); render(); };
+$('ciConfirm').onclick = doCheckin;
+$('ciCancel').onclick = () => $('checkinDlg').close();
+$('hClose').onclick = () => $('histDlg').close();
+$('simulate').onclick = simulate;
+$('skip').onclick = skipDay;
+$('reset').onclick = () => { clearInterval(state.offerTimer); initState(state.mode, true); render(); toast('Reset to Sun 6 Sep. Tip: click +1 day three times to watch Meteor Mite reset automatically.'); };
+$('theme').onclick = () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme === 'dark' || (!root.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+  root.dataset.theme = dark ? 'light' : 'dark';
+  $('theme').textContent = dark ? 'Dark mode' : 'Light mode';
+};
+if (matchMedia('(prefers-color-scheme: dark)').matches) $('theme').textContent = 'Light mode';
+
+initState('after');
+render();
+</script>
+</body>
+</html>

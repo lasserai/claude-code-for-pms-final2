@@ -89,3 +89,28 @@ Don't lock in a fix yet — root cause isn't confirmed, and acting on the rough 
 - Drafted and applied (working tree only, not yet reviewed with Wen Li) the fix for the scoring-ratchet bug: `ACCEPTANCE_CREDIT`/`DECLINE_PENALTY` made symmetric at 0.10/0.10 (old 0.08/0.12 meant only responders with ≥60% acceptance held steady — now the breakeven is the intended 50%), a new `TIMEOUT_PENALTY` (0.05, half the cost of an active decline) so a missed ping is no longer scored the same as a explicit no, and a `DECAY_PER_DAY` (0.05) so an untouched score eases back to neutral on its own — fully recovered after ~20 idle days. Open design question still owed to Wen Li: should decay apply even when a responder simply isn't being offered anything, or only between actual answers?
 - Traced the full "responder gone quiet" recovery path end to end: getting re-marked available and a matching incident coming up are still manual/circumstantial gates the code doesn't touch; the decay fix now makes the acceptance-history component self-healing; but competitive ranking still depends on proximity/capability, and — the biggest unverified link — `push_to_device`/`poll_device` in `offer.py` are unimplemented stubs, so delivery confirmation still can't be confirmed from this code alone.
 - Compared against how mature dispatch/marketplace systems handle this class of problem: the two biggest gaps beyond the scoring bug are (1) no delivery-confirmation signal distinguishing "never sent" from "sent, no answer," and (2) no staged/canary rollout or automated acceptance-rate alerting — which is why a real regression ran undetected for a month. Proposed folding both into 4.3 alongside the scoring fix and the 60s→75s timeout ease, plus elevating the self-service callout/availability history idea (from 10 Sep) given it's what would have caught Vesper's collapse without an interview.
+
+### What we learned this session (22 Sep 2026)
+
+- Helen's ask (`05-super-speed/director-request.txt`): before anyone touches the code, show what we'd build from the point of view of the person it happens to. It shouldn't be a setting. It should be something Kip would notice and a quiet responder would feel. Answered with `05-super-speed/brief.md`, the current brief. It covers the business problem, then a section for each role: Helen, PM, handler, responder, Sofia, Marcus/Wen, Ravi, Nadia, the Supply PM and Security. `brief-package.md` holds the full engineering spec. `action-brief.md` is a duplicate of `brief.md`. `quiet-responder-brief.md` and `director-brief.md` are superseded drafts.
+- Proposed product:
+  - a console flag when a responder falls below 40% of their own 6-week median of offers, plus a plain-language reason
+  - an "I'm back — send me work" check-in (handler or responder) that sets standing to max(current, 0.5), once per 7 days
+  - an automatic reset to neutral after 7 days with no offer reaching the responder (`05-super-speed/auto-reset-spec.md`)
+  - a 30-day offer history for responders
+  - Rows where the responder was ranked but never reached do **not** restart the 7-day clock.
+- Business case numbers (from `callout-history.csv`):
+  - Acceptance went 77% → 54% → 73% by 31 Aug, so the headline metric will soon look healed while 4 responders sit at 0–1 offers.
+  - Total offers held steady at 158–177 a week: work moved between responders, not seasonal.
+  - The top 4 responders' share of offers rose from 32% to 48%.
+  - About 100 fewer accepted offers in 4 weeks (−19%). Whether one accepted offer equals one filled callout is unconfirmed; that's for Ravi.
+  - Proposed a second headline metric: "responders gone quiet."
+- A check-in's effect is bounded. Standing is 0.25 of the ranking weight, so going from 0 to 0.5 is worth about the same as being 9 minutes closer. It doesn't guarantee offers.
+- The "gone quiet" rule, replayed on the CSV, flags exactly Farlight, Meteor Mite, The Undertow and Vesper in the week of 17 Aug, with no false positives. It can't see the delivery group.
+- The data contradicts itself: Nightwell's records show 21 sent and 15 *taken* last week while the tickets say nothing arrives. Get `pings_sent`/`pings_taken` defined before trusting either.
+- Open with Wen:
+  - Is `history._scores` really in memory in production, resetting on every deploy?
+  - Is there a ranking log to backfill from?
+  - Should unavailable days count toward the 7-day reset?
+- Clickable prototype: `05-super-speed/prototype.html`, a single file. It shows all 16 real responders under their handlers, a region view, Today-vs-After modes, a +1 day clock with auto-reset, check-in, simulated callouts and a delivery-report button. The delivery-report button is a proposal, not in the brief. The bars and ticket IDs are real; the offer rows and tags are illustrative. The busy flag for The Gale is ~1.5× usual, not "twice" as early drafts said.
+- Nothing is reviewed with Wen or Marcus yet. Engineering sizes ("2–3 sprints") and the success targets are PM guesses.
