@@ -114,3 +114,20 @@ Don't lock in a fix yet — root cause isn't confirmed, and acting on the rough 
   - Should unavailable days count toward the 7-day reset?
 - Clickable prototype: `05-super-speed/prototype.html`, a single file. It shows all 16 real responders under their handlers, a region view, Today-vs-After modes, a +1 day clock with auto-reset, check-in, simulated callouts and a delivery-report button. The delivery-report button is a proposal, not in the brief. The bars and ticket IDs are real; the offer rows and tags are illustrative. The busy flag for The Gale is ~1.5× usual, not "twice" as early drafts said.
 - Nothing is reviewed with Wen or Marcus yet. Engineering sizes ("2–3 sprints") and the success targets are PM guesses.
+
+### What we learned this session (24 Sep 2026)
+
+- **Two project skills now live in `.claude/skills/`.**
+  - `review-checklist` has six checks: who decides / who does / by when; how we'll know it worked, with metric owner and definition; scope end matches start; problem before fix; numbers trace and agree; guesses labelled. The user wrote the first four; the last two were added after reviewing the brief.
+  - `eng-readiness` has seven checks: testable acceptance criteria; behaviour and edge cases; dependencies and contracts; data, privacy and security; rollout and rollback; owned questions with real estimates; claims match the code.
+  - Both are read-only and never edit the document.
+- **First run on `05-super-speed/brief.md`:** review-checklist says "Fix first" and eng-readiness says "Ready with questions". The fixes are still unapplied:
+  - "about twice usual" should be about 1.5× (line 93)
+  - "five weeks" of tickets has no source
+  - the success targets aren't labelled as starting points
+  - Security has no named owner, and some owners are shared ("Wen, Marcus")
+  - E1 says the 75s timeout is drafted, but `config.py:9` still has `OFFER_TIMEOUT_SECONDS = 60`
+  - the brief doesn't mention the 7-day auto-reset from `auto-reset-spec.md`
+- **Two scheduled tasks run every Monday while the app is open:** `monday-brief-review` (~09:13, review-checklist) and `monday-eng-readiness` (~09:40, eng-readiness). The task files live at `~/.claude/scheduled-tasks/`, outside this folder, which is a known exception to the scope rule; they hold instructions only. The first manual "Run now" of each was pending permission approvals.
+- **Shareable copies of the brief:** `05-super-speed/brief.pdf` (4 pages) and `brief.docx`, both with the content unchanged. For Zoom chat, send the PDF as a file plus a short plain-text summary; the full brief is too long to paste.
+- **GitHub pushes:** HTTPS pushes failed. The Keychain token was rejected (403), and pasting tokens at the prompt added carriage returns. We're switching to SSH. The key exists at `~/.ssh/id_ed25519` and the remote now points to `git@github.com:lasserai/claude-code-for-pms-final2.git`, but as of 24 Sep the public key **hadn't been added to GitHub**, so pushes still fail with `Permission denied (publickey)`. Until the key is added at github.com/settings/ssh/new, 5 local commits are unpushed. Repo: https://github.com/lasserai/claude-code-for-pms-final2
